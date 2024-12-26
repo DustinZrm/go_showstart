@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-	"time"
 
 	jsoniter "github.com/json-iterator/go"
 	"github.com/staparx/go_showstart/log"
@@ -304,18 +303,21 @@ func (c *ShowStartClient) CoreOrder(ctx context.Context, coreOrderKey string) (*
 
 	if resultStr, ok := resp.Result.(string); ok {
 		if resultStr == "pending" {
-			time.Sleep(200 * time.Millisecond)
-			return c.CoreOrder(ctx, coreOrderKey)
+			// 如果 result 为 "pending"，则直接返回 pending，结束当前go routine
+			return nil, errors.New("pending,订单未完全生成,但可能已经成功")
 		}
 	}
 
-	// 间隔太长发生，待测试
+	// 12.26 间隔太长发生，待测试复现
 	if strings.Contains(string(result), "未找到订单数据") {
-		time.Sleep(200 * time.Millisecond)
-		return c.CoreOrder(ctx, coreOrderKey)
+		return nil, errors.New("未找到订单数据")
 	}
 
-	return resp, nil
+	if resp.Success || resp.State == "1" {
+		return resp, nil
+	}
+
+	return nil, errors.New(string(result)) // 待测试
 }
 
 func (c *ShowStartClient) GetOrderResult(ctx context.Context, orderJobKey string) (*GetOrderResultResp, error) {
@@ -344,9 +346,8 @@ func (c *ShowStartClient) GetOrderResult(ctx context.Context, orderJobKey string
 	}
 
 	if commonResp.Success && commonResp.Result == "pending" {
-		// 如果 success 为 true 且 result 为 "pending"，则等待 200ms 后再次查询
-		time.Sleep(200 * time.Millisecond)
-		return c.GetOrderResult(ctx, orderJobKey)
+		// 如果 success 为 true 且 result 为 "pending"，则直接返回 pending，结束当前go routine
+		return nil, errors.New("pending,订单未完全生成,但可能已经成功")
 	}
 
 	// 否则，继续解析为 GetOrderResultResp

@@ -301,22 +301,69 @@ func GoOrder(ctx context.Context, index int, c client.ShowStartIface, orderReq *
 			orderJobKeyAcquired = true // 有线程获取到orderJobKey
 			orderJobKeyAcquiredLock.Unlock()
 
-			//核心订单确认
-			_, err = c.CoreOrder(ctx, coreOrderKey)
-			if err != nil {
-				log.Logger.Error(logPrefix+"核心订单确认失败：", zap.Error(err))
-				//释放orderJobKeyAcquired
-				orderJobKeyAcquiredLock.Lock()
-				orderJobKeyAcquired = false
+			// 核心订单确认
+			CoreOrder, coreOrderCancel := context.WithCancel(ctx)
+			defer coreOrderCancel()
+			// 每隔200ms发送核心订单确认
+		CoreLoop:
+			for {
+				select {
+				case <-CoreOrder.Done():
+					//停止循环核心订单确认
+					break CoreLoop
+				default:
+					//核心订单确认
+					go func() {
+						_, err = c.CoreOrder(ctx, coreOrderKey)
+
+						// 如果CoreOrder.Done()则不再继续核心订单确认
+						if CoreOrder.Err() != nil {
+							return
+						}
+
+						if err != nil {
+							log.Logger.Error(logPrefix+"核心订单确认失败：", zap.Error(err))
+
+							// 如果err中包含“小手点得太快啦，休息一下”，则不停止循环核心订单确认
+							if strings.Contains(err.Error(), "小手点得太快啦，休息一下") {
+								return
+							}
+							// 如果err中包含“pending”，则不停止循环核心订单确认
+							if strings.Contains(err.Error(), "pending") {
+								return
+							}
+							// 12.26 间隔太长发生，待测试复现
+							if strings.Contains(err.Error(), "未找到订单数据") {
+								return
+							}
+
+							//释放orderJobKeyAcquired
+							orderJobKeyAcquiredLock.Lock()
+							orderJobKeyAcquired = false
+							orderJobKeyAcquiredLock.Unlock()
+							//停止循环核心订单确认
+							coreOrderCancel()
+							return
+						}
+						log.Logger.Info(logPrefix + "核心订单确认成功！")
+						//停止循环核心订单确认
+						coreOrderCancel()
+					}()
+					// 间隔200ms核心订单确认
+					time.Sleep(200 * time.Millisecond)
+				}
+			}
+
+			// 表示核心订单确认失败
+			orderJobKeyAcquiredLock.Lock()
+			if !orderJobKeyAcquired {
 				orderJobKeyAcquiredLock.Unlock()
 				continue
 			}
 
-			log.Logger.Info(logPrefix + "核心订单确认成功！")
-
+			// 查询订单结果
 			OrderResult, orderResultCancel := context.WithCancel(ctx)
 			defer orderResultCancel()
-
 			// 每隔200ms发送查询订单结果
 			for {
 				select {
@@ -335,10 +382,16 @@ func GoOrder(ctx context.Context, index int, c client.ShowStartIface, orderReq *
 
 						if err != nil {
 							log.Logger.Error(logPrefix+"查询订单结果失败：", zap.Error(err))
+
 							// 如果err中包含“小手点得太快啦，休息一下”，则不停止循环查询订单结果
 							if strings.Contains(err.Error(), "小手点得太快啦，休息一下") {
 								return
 							}
+							// 如果err中包含“pending”，则不停止循环查询订单结果
+							if strings.Contains(err.Error(), "pending") {
+								return
+							}
+
 							//释放orderJobKeyAcquired
 							orderJobKeyAcquiredLock.Lock()
 							orderJobKeyAcquired = false
