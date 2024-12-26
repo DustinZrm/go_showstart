@@ -288,10 +288,31 @@ func GoOrder(ctx context.Context, index int, c client.ShowStartIface, orderReq *
 
 			log.Logger.Info(fmt.Sprintf(logPrefix+"获取orderJobKey成功！orderJobKey：%s", orderJobKey))
 
+			coreOrderKey := orderResp.Result.CoreOrderKey
+			if coreOrderKey == "" {
+				log.Logger.Error(logPrefix + "coreOrderKey为空")
+				continue
+			}
+
+			log.Logger.Info(fmt.Sprintf(logPrefix+"获取coreOrderKey成功！coreOrderKey：%s", coreOrderKey))
+
 			//获取orderJobKey锁
 			orderJobKeyAcquiredLock.Lock()
 			orderJobKeyAcquired = true // 有线程获取到orderJobKey
 			orderJobKeyAcquiredLock.Unlock()
+
+			//核心订单确认
+			_, err = c.CoreOrder(ctx, coreOrderKey)
+			if err != nil {
+				log.Logger.Error(logPrefix+"核心订单确认失败：", zap.Error(err))
+				//释放orderJobKeyAcquired
+				orderJobKeyAcquiredLock.Lock()
+				orderJobKeyAcquired = false
+				orderJobKeyAcquiredLock.Unlock()
+				continue
+			}
+
+			log.Logger.Info(logPrefix + "核心订单确认成功！")
 
 			OrderResult, orderResultCancel := context.WithCancel(ctx)
 			defer orderResultCancel()
@@ -314,8 +335,8 @@ func GoOrder(ctx context.Context, index int, c client.ShowStartIface, orderReq *
 
 						if err != nil {
 							log.Logger.Error(logPrefix+"查询订单结果失败：", zap.Error(err))
-							// 如果err中包含“小手指点得太快啦，休息一下”，则不停止循环查询订单结果
-							if strings.Contains(err.Error(), "小手指点得太快啦，休息一下") {
+							// 如果err中包含“小手点得太快啦，休息一下”，则不停止循环查询订单结果
+							if strings.Contains(err.Error(), "小手点得太快啦，休息一下") {
 								return
 							}
 							//释放orderJobKeyAcquired

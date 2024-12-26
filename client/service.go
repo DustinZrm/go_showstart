@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	jsoniter "github.com/json-iterator/go"
@@ -274,7 +275,6 @@ func (c *ShowStartClient) Order(ctx context.Context, req *OrderReq) (*OrderResp,
 	return nil, errors.New(resp.Msg)
 }
 
-// 未使用
 func (c *ShowStartClient) CoreOrder(ctx context.Context, coreOrderKey string) (*OrderCoreResp, error) {
 	path := "/nj/order/coreOrder"
 
@@ -284,6 +284,9 @@ func (c *ShowStartClient) CoreOrder(ctx context.Context, coreOrderKey string) (*
 	if err != nil {
 		return nil, err
 	}
+
+	// 将 CoreOrder 的返回值打印到Debug日志中
+	log.Logger.Debug("CoreOrder: " + string(result))
 
 	var resp *OrderCoreResp
 	err = jsoniter.Unmarshal(result, &resp)
@@ -304,6 +307,12 @@ func (c *ShowStartClient) CoreOrder(ctx context.Context, coreOrderKey string) (*
 			time.Sleep(200 * time.Millisecond)
 			return c.CoreOrder(ctx, coreOrderKey)
 		}
+	}
+
+	// 间隔太长发生，待测试
+	if strings.Contains(string(result), "未找到订单数据") {
+		time.Sleep(200 * time.Millisecond)
+		return c.CoreOrder(ctx, coreOrderKey)
 	}
 
 	return resp, nil
