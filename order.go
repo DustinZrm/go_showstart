@@ -309,58 +309,71 @@ func GoOrder(ctx context.Context, index int, c client.ShowStartIface, orderReq *
 			// 测试间隔
 			// time.Sleep(200 * time.Millisecond)
 
-			// 核心订单确认
-			CoreOrder, coreOrderCancel := context.WithCancel(ctx)
-			defer coreOrderCancel()
-			// 每隔ms发送核心订单确认
-		CoreLoop:
-			for {
-				select {
-				case <-CoreOrder.Done():
-					//停止循环核心订单确认
-					break CoreLoop
-				default:
-					//核心订单确认
-					go func() {
-						_, err = c.CoreOrder(ctx, coreOrderKey)
+			// 核心订单确认   ！ 循环确认
+			// 	CoreOrder, coreOrderCancel := context.WithCancel(ctx)
+			// 	defer coreOrderCancel()
+			// 	// 每隔ms发送核心订单确认
+			// CoreLoop:
+			// 	for {
+			// 		select {
+			// 		case <-CoreOrder.Done():
+			// 			//停止循环核心订单确认
+			// 			break CoreLoop
+			// 		default:
+			// 			//核心订单确认
+			// 			go func() {
+			// 				_, err = c.CoreOrder(ctx, coreOrderKey)
 
-						// 如果CoreOrder.Done()则不再继续核心订单确认
-						if CoreOrder.Err() != nil {
-							return
-						}
+			// 				// 如果CoreOrder.Done()则不再继续核心订单确认
+			// 				if CoreOrder.Err() != nil {
+			// 					return
+			// 				}
 
-						if err != nil {
-							log.Logger.Error(logPrefix + "核心订单确认失败：" + err.Error())
+			// 				if err != nil {
+			// 					log.Logger.Error(logPrefix + "核心订单确认失败：" + err.Error())
 
-							// 如果err中包含“小手点得太快啦，休息一下”，则不停止循环核心订单确认
-							if strings.Contains(err.Error(), "小手点得太快啦，休息一下") {
-								return
-							}
-							// 如果err中包含“pending”，则不停止循环核心订单确认
-							if strings.Contains(err.Error(), "pending") {
-								return
-							}
-							// 12.26 间隔太长发生，待测试复现
-							if strings.Contains(err.Error(), "未找到订单数据") {
-								return
-							}
+			// 					// 如果err中包含“小手点得太快啦，休息一下”，则不停止循环核心订单确认
+			// 					if strings.Contains(err.Error(), "小手点得太快啦，休息一下") {
+			// 						return
+			// 					}
+			// 					// 如果err中包含“pending”，则不停止循环核心订单确认
+			// 					if strings.Contains(err.Error(), "pending") {
+			// 						return
+			// 					}
+			// 					// 12.26 间隔太长发生，待测试复现
+			// 					if strings.Contains(err.Error(), "未找到订单数据") {
+			// 						return
+			// 					}
 
-							//释放orderJobKeyAcquired
-							orderJobKeyAcquiredLock.Lock()
-							orderJobKeyAcquired = false
-							orderJobKeyAcquiredLock.Unlock()
-							//停止循环核心订单确认
-							coreOrderCancel()
-							return
-						}
-						log.Logger.Info(logPrefix + "核心订单确认成功！")
-						//停止循环核心订单确认
-						coreOrderCancel()
-					}()
-					// 间隔700ms核心订单确认
-					time.Sleep(700 * time.Millisecond)
-				}
+			// 					//释放orderJobKeyAcquired
+			// 					orderJobKeyAcquiredLock.Lock()
+			// 					orderJobKeyAcquired = false
+			// 					orderJobKeyAcquiredLock.Unlock()
+			// 					//停止循环核心订单确认
+			// 					coreOrderCancel()
+			// 					return
+			// 				}
+			// 				log.Logger.Info(logPrefix + "核心订单确认成功！")
+			// 				//停止循环核心订单确认
+			// 				coreOrderCancel()
+			// 			}()
+			// 			// 间隔700ms核心订单确认
+			// 			time.Sleep(700 * time.Millisecond)
+			// 		}
+			// 	}
+
+			// 核心订单确认    ！ 非循环确认  待测试效果
+			_, err = c.CoreOrder(ctx, coreOrderKey)
+			if err != nil {
+				log.Logger.Error(logPrefix + "核心订单确认失败：" + err.Error())
+
+				// 释放orderJobKeyAcquired
+				orderJobKeyAcquiredLock.Lock()
+				orderJobKeyAcquired = false
+				orderJobKeyAcquiredLock.Unlock()
+				continue
 			}
+			log.Logger.Info(logPrefix + "核心订单确认成功！")
 
 			// 表示核心订单确认失败
 			orderJobKeyAcquiredLock.Lock()

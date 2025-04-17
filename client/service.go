@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	jsoniter "github.com/json-iterator/go"
 	"github.com/staparx/go_showstart/log"
@@ -304,11 +305,11 @@ func (c *ShowStartClient) CoreOrder(ctx context.Context, coreOrderKey string) (*
 	if resultStr, ok := resp.Result.(string); ok {
 		if resultStr == "pending" {
 			// 如果 result 为 "pending"，则直接返回 pending，结束当前go routine
-			return nil, errors.New("pending,订单未完全生成,但可能已经成功")
+			// return nil, errors.New("pending,订单未完全生成,但可能已经成功")
 
 			// 间隔200ms
-			// time.Sleep(200 * time.Millisecond)
-			// return c.CoreOrder(ctx, coreOrderKey)
+			time.Sleep(200 * time.Millisecond)
+			return c.CoreOrder(ctx, coreOrderKey)
 		}
 	}
 
