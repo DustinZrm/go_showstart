@@ -305,6 +305,10 @@ func (c *ShowStartClient) CoreOrder(ctx context.Context, coreOrderKey string) (*
 		if resultStr == "pending" {
 			// 如果 result 为 "pending"，则直接返回 pending，结束当前go routine
 			return nil, errors.New("pending,订单未完全生成,但可能已经成功")
+
+			// 间隔200ms
+			// time.Sleep(200 * time.Millisecond)
+			// return c.CoreOrder(ctx, coreOrderKey)
 		}
 	}
 
@@ -317,7 +321,7 @@ func (c *ShowStartClient) CoreOrder(ctx context.Context, coreOrderKey string) (*
 		return resp, nil
 	}
 
-	return nil, errors.New(string(result)) // 待测试
+	return nil, errors.New(resp.Msg)
 }
 
 func (c *ShowStartClient) GetOrderResult(ctx context.Context, orderJobKey string) (*GetOrderResultResp, error) {

@@ -22,6 +22,7 @@ type OrderReq struct {
 	CouponID          string         `json:"couponId"`
 	CheckCode         string         `json:"checkCode"`
 	Source            int            `json:"source"`
+	SourcePath        int            `json:"sourcePath"`
 	Discount          int            `json:"discount"`
 	SessionID         int            `json:"sessionId"`
 	Freight           int            `json:"freight"`

@@ -73,6 +73,7 @@ func ConfirmOrder(ctx context.Context, order *OrderDetail, cfg *config.Config) e
 		CouponID:          "",
 		CheckCode:         "",
 		Source:            0,
+		SourcePath:        8, // 8
 		Discount:          0,
 		SessionID:         confirm.Result.OrderInfoVo.SessionID,
 		Freight:           0,
@@ -298,13 +299,20 @@ func GoOrder(ctx context.Context, index int, c client.ShowStartIface, orderReq *
 
 			//获取orderJobKey锁
 			orderJobKeyAcquiredLock.Lock()
+			if orderJobKeyAcquired { //已经有线程获取到orderJobKey
+				orderJobKeyAcquiredLock.Unlock()
+				continue
+			}
 			orderJobKeyAcquired = true // 有线程获取到orderJobKey
 			orderJobKeyAcquiredLock.Unlock()
+
+			// 测试间隔
+			// time.Sleep(200 * time.Millisecond)
 
 			// 核心订单确认
 			CoreOrder, coreOrderCancel := context.WithCancel(ctx)
 			defer coreOrderCancel()
-			// 每隔200ms发送核心订单确认
+			// 每隔ms发送核心订单确认
 		CoreLoop:
 			for {
 				select {
@@ -322,7 +330,7 @@ func GoOrder(ctx context.Context, index int, c client.ShowStartIface, orderReq *
 						}
 
 						if err != nil {
-							log.Logger.Error(logPrefix+"核心订单确认失败：", zap.Error(err))
+							log.Logger.Error(logPrefix + "核心订单确认失败：" + err.Error())
 
 							// 如果err中包含“小手点得太快啦，休息一下”，则不停止循环核心订单确认
 							if strings.Contains(err.Error(), "小手点得太快啦，休息一下") {
@@ -349,8 +357,8 @@ func GoOrder(ctx context.Context, index int, c client.ShowStartIface, orderReq *
 						//停止循环核心订单确认
 						coreOrderCancel()
 					}()
-					// 间隔200ms核心订单确认
-					time.Sleep(200 * time.Millisecond)
+					// 间隔700ms核心订单确认
+					time.Sleep(700 * time.Millisecond)
 				}
 			}
 
@@ -360,6 +368,7 @@ func GoOrder(ctx context.Context, index int, c client.ShowStartIface, orderReq *
 				orderJobKeyAcquiredLock.Unlock()
 				continue
 			}
+			orderJobKeyAcquiredLock.Unlock()
 
 			// 查询订单结果
 			OrderResult, orderResultCancel := context.WithCancel(ctx)
@@ -381,7 +390,7 @@ func GoOrder(ctx context.Context, index int, c client.ShowStartIface, orderReq *
 						}
 
 						if err != nil {
-							log.Logger.Error(logPrefix+"查询订单结果失败：", zap.Error(err))
+							log.Logger.Error(logPrefix + "查询订单结果失败：" + err.Error())
 
 							// 如果err中包含“小手点得太快啦，休息一下”，则不停止循环查询订单结果
 							if strings.Contains(err.Error(), "小手点得太快啦，休息一下") {
